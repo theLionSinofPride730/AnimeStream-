@@ -236,7 +236,7 @@ export function WatchPageClient({
               <ServerSelector
                 episodeId={episodeId}
                 onSourcesLoaded={handleSourcesLoaded}
-                initialProvider="hianime"
+                initialProvider="zoro"
                 initialAudioType="sub"
               />
             </div>

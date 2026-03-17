@@ -69,7 +69,7 @@ interface ServerStoreActions {
 type ServerStore = ServerStoreState & ServerStoreActions;
 
 const DEFAULT_STATE: ServerStoreState = {
-  selectedProvider: "hianime",
+  selectedProvider: "zoro",
   audioType: "sub",
   availableServers: [],
   currentSources: null,

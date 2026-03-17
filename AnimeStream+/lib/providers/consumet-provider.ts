@@ -163,7 +163,10 @@ function createConsumetProvider(providerName: ConsumetProvider): AnimeProvider {
 
     async checkStatus(): Promise<boolean> {
       try {
-        const response = await client.get(`/anime/${providerName}/naruto`, { timeout: 5000 });
+        const response = await client.get(`/anime/${providerName}/search`, { 
+          params: { query: "naruto" },
+          timeout: 5000 
+        });
         return Array.isArray(response.data?.results);
       } catch {
         return false;

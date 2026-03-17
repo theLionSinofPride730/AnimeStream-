@@ -15,18 +15,15 @@ interface ServerSelectorProps {
 
 // Provider-specific colors for visual distinction
 const PROVIDER_COLORS: Record<string, string> = {
-  hianime: "from-purple-500/20 to-purple-600/10 border-purple-500/30 hover:border-purple-400",
-  miruro: "from-blue-500/20 to-blue-600/10 border-blue-500/30 hover:border-blue-400",
-  kuudere: "from-pink-500/20 to-pink-600/10 border-pink-500/30 hover:border-pink-400",
-  gogoanime: "from-green-500/20 to-green-600/10 border-green-500/30 hover:border-green-400",
   zoro: "from-orange-500/20 to-orange-600/10 border-orange-500/30 hover:border-orange-400",
+  gogoanime: "from-green-500/20 to-green-600/10 border-green-500/30 hover:border-green-400",
   animepahe: "from-cyan-500/20 to-cyan-600/10 border-cyan-500/30 hover:border-cyan-400",
 };
 
 export function ServerSelector({
   episodeId,
   onSourcesLoaded,
-  initialProvider = "hianime",
+  initialProvider = "zoro",
   initialAudioType = "sub",
 }: ServerSelectorProps) {
   const {
@@ -173,7 +170,7 @@ export function ServerSelector({
         {filteredServers.map((server) => {
           const isSelected = selectedProvider === server.id;
           const isLoadingThis = loadingProvider === server.id;
-          const colorClass = PROVIDER_COLORS[server.id] || PROVIDER_COLORS.hianime;
+          const colorClass = PROVIDER_COLORS[server.id] || PROVIDER_COLORS.zoro;
 
           return (
             <button

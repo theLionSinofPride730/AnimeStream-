@@ -1,14 +1,14 @@
 /**
  * Provider Registry
  * Central export for all anime streaming providers
+ * 
+ * Note: Using Consumet API providers (Gogoanime, Zoro, AnimePahe) which are
+ * the most reliable free anime streaming APIs available.
  */
 
 export * from "./types";
 
-// Import all providers
-import { hianimeProvider } from "./hianime";
-import { miruroProvider, MIRURO_BACKENDS, type MiruroBackend } from "./miruro";
-import { kuudereProvider } from "./kuudere";
+// Import Consumet providers (most reliable)
 import { 
   gogoanimeProvider, 
   zoroProvider, 
@@ -25,37 +25,29 @@ import type {
   ProviderStatus 
 } from "./types";
 
-// Provider registry - ordered by priority
+// Provider registry - only using working Consumet providers
+// Note: HiAnime/Miruro/Kuudere external APIs require payment or are unavailable
 export const providers: ProviderRegistry = {
-  hianime: hianimeProvider,
-  miruro: miruroProvider,
-  kuudere: kuudereProvider,
-  gogoanime: gogoanimeProvider,
-  zoro: zoroProvider,
-  animepahe: animepaheProvider,
+  zoro: zoroProvider,        // Best for subs + dubs, high quality
+  gogoanime: gogoanimeProvider, // Reliable, wide library
+  animepahe: animepaheProvider, // Sub-only, good quality
 };
 
 // Export individual providers
 export { 
-  hianimeProvider, 
-  miruroProvider, 
-  kuudereProvider,
   gogoanimeProvider,
   zoroProvider,
   animepaheProvider,
-  MIRURO_BACKENDS,
   CONSUMET_PROVIDERS,
 };
 
-export type { MiruroBackend, ConsumetProvider };
+export type { ConsumetProvider };
 
 // Default provider order (used for auto-fallback)
+// Zoro first as it has best sub/dub support
 export const PROVIDER_PRIORITY = [
-  "hianime",
-  "miruro", 
   "zoro",
   "gogoanime",
-  "kuudere",
   "animepahe",
 ] as const;
 
