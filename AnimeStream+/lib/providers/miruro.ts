@@ -1,7 +1,7 @@
 /**
- * Miruro API Provider
- * Supports multiple backends: AnimeKai, HiAnime, AnimePahe
- * API: https://miruro-api.vercel.app/api
+ * Aniwatch Provider (via Consumet API)
+ * Alternative name for HiAnime/Zoro, using Consumet's Aniwatch endpoint
+ * API: https://api.consumet.org/anime/zoro
  */
 
 import axios from "axios";
@@ -14,7 +14,7 @@ import type {
   ProviderServer,
 } from "./types";
 
-const BASE_URL = "https://miruro-api.vercel.app/api";
+const BASE_URL = "https://api.consumet.org";
 
 const client = axios.create({
   baseURL: BASE_URL,
@@ -24,64 +24,67 @@ const client = axios.create({
   },
 });
 
-// Available backend providers in Miruro
-export const MIRURO_BACKENDS = ["animekai", "hianime", "animepahe"] as const;
+// Available backend servers
+export const MIRURO_BACKENDS = ["vidcloud", "streamsb", "streamtape"] as const;
 export type MiruroBackend = typeof MIRURO_BACKENDS[number];
 
 export const miruroProvider: AnimeProvider = {
   id: "miruro",
-  name: "Miruro",
+  name: "Aniwatch",
   baseUrl: BASE_URL,
   supportsDub: true,
 
   async search(query: string): Promise<SearchResult[]> {
     try {
-      const response = await client.get(`/search/${encodeURIComponent(query)}`);
+      const response = await client.get("/anime/zoro/search", {
+        params: { query, page: 1 },
+      });
       
-      const results = response.data?.results || response.data || [];
+      const results = response.data?.results || [];
       
       return results.map((anime: any) => ({
         id: anime.id,
-        title: anime.title?.english || anime.title?.romaji || anime.title || anime.name,
-        image: anime.image || anime.coverImage?.large || anime.poster,
-        totalEpisodes: anime.totalEpisodes || anime.episodes,
-        type: anime.type || anime.format,
+        title: anime.title,
+        image: anime.image,
+        totalEpisodes: anime.totalEpisodes,
+        type: anime.type,
         status: anime.status,
       }));
     } catch (error) {
-      console.error("[Miruro] Search failed:", error);
+      console.error("[Aniwatch] Search failed:", error);
       return [];
     }
   },
 
   async getAnimeInfo(animeId: string): Promise<AnimeInfo> {
     try {
-      const response = await client.get(`/anime/episodes/${animeId}`);
+      const response = await client.get("/anime/zoro/info", {
+        params: { id: animeId },
+      });
       const data = response.data;
       
-      const episodes = data?.episodes || data || [];
+      const episodes = data?.episodes || [];
 
       return {
         id: animeId,
         title: data?.title || animeId,
         image: data?.image,
         description: data?.description,
-        totalEpisodes: episodes.length,
+        totalEpisodes: episodes.length || data?.totalEpisodes,
         episodes: episodes.map((ep: any, index: number) => ({
-          id: ep.id || ep.episodeId || `${animeId}-ep-${index + 1}`,
+          id: ep.id,
           number: ep.number || index + 1,
           title: ep.title,
           isFiller: ep.isFiller,
         })),
       };
     } catch (error) {
-      console.error("[Miruro] Get anime info failed:", error);
-      throw new Error("Failed to fetch anime info from Miruro");
+      console.error("[Aniwatch] Get anime info failed:", error);
+      throw new Error("Failed to fetch anime info from Aniwatch");
     }
   },
 
   async getServers(episodeId: string): Promise<ProviderServer[]> {
-    // Miruro supports multiple backend providers as "servers"
     return MIRURO_BACKENDS.map((backend) => ({
       name: backend.charAt(0).toUpperCase() + backend.slice(1),
       id: backend,
@@ -91,18 +94,20 @@ export const miruroProvider: AnimeProvider = {
   async getSources(
     episodeId: string,
     audioType: AudioType = "sub",
-    server: string = "animekai"
+    server: string = "vidcloud"
   ): Promise<EpisodeSourceData> {
     try {
-      // Miruro uses provider param to specify backend
-      const response = await client.get("/anime/sources", {
-        params: {
-          id: episodeId,
-          provider: server,
-          dub: audioType === "dub",
-        },
-      });
+      const params: Record<string, string> = { episodeId };
+      
+      if (server && server !== "vidcloud") {
+        params.server = server;
+      }
+      
+      if (audioType === "dub") {
+        params.episodeId = episodeId.replace("$sub", "$dub");
+      }
 
+      const response = await client.get("/anime/zoro/watch", { params });
       const data = response.data;
       
       if (!data?.sources || data.sources.length === 0) {
@@ -117,7 +122,7 @@ export const miruroProvider: AnimeProvider = {
           server: server,
         })),
         subtitles: data.subtitles?.map((sub: any) => ({
-          lang: sub.lang || sub.language || "Unknown",
+          lang: sub.lang || "Unknown",
           url: sub.url,
           label: sub.lang,
         })) || [],
@@ -127,24 +132,24 @@ export const miruroProvider: AnimeProvider = {
         server: server,
       };
     } catch (error) {
-      console.error("[Miruro] Get sources failed:", error);
-      throw new Error("Failed to fetch sources from Miruro");
+      console.error("[Aniwatch] Get sources failed:", error);
+      throw new Error("Failed to fetch sources from Aniwatch");
     }
   },
 
   async checkStatus(): Promise<boolean> {
     try {
-      const response = await client.get("/search/naruto", { timeout: 5000 });
-      return Array.isArray(response.data?.results || response.data);
+      const response = await client.get("/anime/zoro/search", {
+        params: { query: "naruto", page: 1 },
+        timeout: 5000,
+      });
+      return Array.isArray(response.data?.results);
     } catch {
       return false;
     }
   },
 };
 
-/**
- * Get sources from a specific Miruro backend
- */
 export async function getMiruroSourcesFromBackend(
   episodeId: string,
   backend: MiruroBackend,

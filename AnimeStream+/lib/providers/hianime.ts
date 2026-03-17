@@ -1,7 +1,8 @@
 /**
- * HiAnime API Provider
- * Primary provider with high quality sources and sub/dub support
- * API: https://hianime-api-five.vercel.app/api/v2/hianime
+ * HiAnime Provider (via Consumet Zoro API)
+ * HiAnime is the same as Zoro/Aniwatch, using Consumet's Zoro endpoint
+ * This provides the best quality and sub/dub support
+ * API: https://api.consumet.org/anime/zoro
  */
 
 import axios from "axios";
@@ -14,7 +15,7 @@ import type {
   ProviderServer,
 } from "./types";
 
-const BASE_URL = "https://hianime-api-five.vercel.app/api/v2/hianime";
+const BASE_URL = "https://api.consumet.org";
 
 const client = axios.create({
   baseURL: BASE_URL,
@@ -32,20 +33,17 @@ export const hianimeProvider: AnimeProvider = {
 
   async search(query: string): Promise<SearchResult[]> {
     try {
-      const response = await client.get("/search", {
-        params: { q: query, page: 1 },
+      const response = await client.get("/anime/zoro/search", {
+        params: { query, page: 1 },
       });
       
-      const data = response.data;
-      if (!data.success || !data.data?.animes) {
-        return [];
-      }
+      const results = response.data?.results || [];
 
-      return data.data.animes.map((anime: any) => ({
+      return results.map((anime: any) => ({
         id: anime.id,
-        title: anime.name || anime.title,
-        image: anime.poster || anime.image,
-        totalEpisodes: anime.episodes?.sub || anime.episodes?.dub,
+        title: anime.title,
+        image: anime.image,
+        totalEpisodes: anime.totalEpisodes || anime.episodeCount,
         type: anime.type,
       }));
     } catch (error) {
@@ -56,25 +54,22 @@ export const hianimeProvider: AnimeProvider = {
 
   async getAnimeInfo(animeId: string): Promise<AnimeInfo> {
     try {
-      // Get anime info
-      const infoResponse = await client.get(`/anime/${animeId}`);
-      const info = infoResponse.data?.data?.anime;
-
-      // Get episodes
-      const episodesResponse = await client.get(`/anime/${animeId}/episodes`);
-      const episodesData = episodesResponse.data?.data?.episodes || [];
+      const response = await client.get("/anime/zoro/info", {
+        params: { id: animeId },
+      });
+      const data = response.data;
 
       return {
         id: animeId,
-        title: info?.name || info?.title || animeId,
-        image: info?.poster || info?.image,
-        description: info?.description,
-        totalEpisodes: episodesData.length,
-        status: info?.status,
-        genres: info?.genres,
-        episodes: episodesData.map((ep: any) => ({
-          id: ep.episodeId || `${animeId}?ep=${ep.number}`,
-          number: ep.number,
+        title: data?.title || animeId,
+        image: data?.image,
+        description: data?.description,
+        totalEpisodes: data?.totalEpisodes,
+        status: data?.status,
+        genres: data?.genres,
+        episodes: (data?.episodes || []).map((ep: any, index: number) => ({
+          id: ep.id,
+          number: ep.number || index + 1,
           title: ep.title,
           isFiller: ep.isFiller,
         })),
@@ -86,56 +81,38 @@ export const hianimeProvider: AnimeProvider = {
   },
 
   async getServers(episodeId: string): Promise<ProviderServer[]> {
-    try {
-      const response = await client.get(`/episode/servers`, {
-        params: { animeEpisodeId: episodeId },
-      });
-      
-      const data = response.data?.data;
-      const servers: ProviderServer[] = [];
-      
-      // Add sub servers
-      if (data?.sub) {
-        data.sub.forEach((server: any) => {
-          servers.push({
-            name: `${server.serverName} (Sub)`,
-            id: `sub-${server.serverName.toLowerCase()}`,
-          });
-        });
-      }
-      
-      // Add dub servers
-      if (data?.dub) {
-        data.dub.forEach((server: any) => {
-          servers.push({
-            name: `${server.serverName} (Dub)`,
-            id: `dub-${server.serverName.toLowerCase()}`,
-          });
-        });
-      }
-
-      return servers;
-    } catch (error) {
-      console.error("[HiAnime] Get servers failed:", error);
-      return [];
-    }
+    // Zoro/HiAnime supports these servers
+    return [
+      { name: "VidCloud", id: "vidcloud" },
+      { name: "StreamSB", id: "streamsb" },
+      { name: "StreamTape", id: "streamtape" },
+      { name: "VidStreaming", id: "vidstreaming" },
+    ];
   },
 
   async getSources(
     episodeId: string,
     audioType: AudioType = "sub",
-    server: string = "hd-1"
+    server: string = "vidcloud"
   ): Promise<EpisodeSourceData> {
     try {
-      const response = await client.get("/episode/sources", {
-        params: {
-          animeEpisodeId: episodeId,
-          server: server,
-          category: audioType,
-        },
-      });
+      const params: Record<string, string> = { episodeId };
+      
+      // Add server if not default
+      if (server && server !== "vidcloud") {
+        params.server = server;
+      }
+      
+      // Zoro supports dub selection
+      if (audioType === "dub") {
+        // For Zoro, we need to modify the episodeId to get dub
+        // Usually the dub episode has a different ID suffix
+        params.episodeId = episodeId.replace("$sub", "$dub");
+      }
 
-      const data = response.data?.data;
+      const response = await client.get("/anime/zoro/watch", { params });
+      const data = response.data;
+
       if (!data?.sources || data.sources.length === 0) {
         throw new Error("No sources found");
       }
@@ -144,13 +121,13 @@ export const hianimeProvider: AnimeProvider = {
         sources: data.sources.map((source: any) => ({
           url: source.url,
           quality: source.quality || "auto",
-          isM3U8: source.url?.includes(".m3u8") || source.type === "hls",
+          isM3U8: source.url?.includes(".m3u8") || source.isM3U8 || false,
           server: server,
         })),
-        subtitles: data.tracks?.filter((t: any) => t.kind === "captions").map((track: any) => ({
-          lang: track.label || "Unknown",
-          url: track.file,
-          label: track.label,
+        subtitles: data.subtitles?.map((sub: any) => ({
+          lang: sub.lang,
+          url: sub.url,
+          label: sub.lang,
         })) || [],
         intro: data.intro,
         outro: data.outro,
@@ -165,11 +142,11 @@ export const hianimeProvider: AnimeProvider = {
 
   async checkStatus(): Promise<boolean> {
     try {
-      const response = await client.get("/search", {
-        params: { q: "naruto", page: 1 },
+      const response = await client.get("/anime/zoro/search", {
+        params: { query: "naruto", page: 1 },
         timeout: 5000,
       });
-      return response.data?.success === true;
+      return Array.isArray(response.data?.results);
     } catch {
       return false;
     }

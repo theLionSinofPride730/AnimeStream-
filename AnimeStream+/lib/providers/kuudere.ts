@@ -1,7 +1,7 @@
 /**
- * Kuudere API Provider
- * Lightweight API for kuudere.to streaming sources
- * API: https://kuudere-api.vercel.app/api
+ * 9Anime Provider (via Consumet API)
+ * Uses Consumet's 9anime endpoint as an alternative source
+ * API: https://api.consumet.org/anime/9anime
  */
 
 import axios from "axios";
@@ -14,7 +14,7 @@ import type {
   ProviderServer,
 } from "./types";
 
-const BASE_URL = "https://kuudere-api.vercel.app/api";
+const BASE_URL = "https://api.consumet.org";
 
 const client = axios.create({
   baseURL: BASE_URL,
@@ -26,93 +26,121 @@ const client = axios.create({
 
 export const kuudereProvider: AnimeProvider = {
   id: "kuudere",
-  name: "Kuudere",
+  name: "9Anime",
   baseUrl: BASE_URL,
-  supportsDub: false, // Kuudere primarily serves sub content
+  supportsDub: true,
 
   async search(query: string): Promise<SearchResult[]> {
     try {
-      const response = await client.get("/search", {
-        params: { q: query },
-      });
+      // Try 9anime endpoint, fallback to gogoanime if it fails
+      let response;
+      try {
+        response = await client.get("/anime/9anime/search", {
+          params: { query, page: 1 },
+        });
+      } catch {
+        // Fallback to gogoanime search
+        response = await client.get("/anime/gogoanime/search", {
+          params: { query, page: 1 },
+        });
+      }
 
-      const results = response.data?.results || response.data || [];
+      const results = response.data?.results || [];
 
       return results.map((anime: any) => ({
-        id: anime.id || anime.slug,
-        title: anime.title || anime.name,
-        image: anime.image || anime.poster || anime.cover,
-        totalEpisodes: anime.totalEpisodes || anime.episodes,
+        id: anime.id,
+        title: anime.title,
+        image: anime.image,
+        totalEpisodes: anime.totalEpisodes,
         type: anime.type,
         status: anime.status,
       }));
     } catch (error) {
-      console.error("[Kuudere] Search failed:", error);
+      console.error("[9Anime] Search failed:", error);
       return [];
     }
   },
 
   async getAnimeInfo(animeId: string): Promise<AnimeInfo> {
     try {
-      const response = await client.get(`/info/${animeId}`);
+      let response;
+      try {
+        response = await client.get("/anime/9anime/info", {
+          params: { id: animeId },
+        });
+      } catch {
+        response = await client.get("/anime/gogoanime/info", {
+          params: { id: animeId },
+        });
+      }
       const data = response.data;
 
       const episodes = data?.episodes || [];
 
       return {
         id: animeId,
-        title: data?.title || data?.name || animeId,
-        image: data?.image || data?.poster,
-        description: data?.description || data?.synopsis,
+        title: data?.title || animeId,
+        image: data?.image,
+        description: data?.description,
         totalEpisodes: episodes.length || data?.totalEpisodes,
         status: data?.status,
         genres: data?.genres,
         episodes: episodes.map((ep: any, index: number) => ({
-          id: ep.id || ep.episodeId || `${animeId}-episode-${index + 1}`,
-          number: ep.number || ep.episode || index + 1,
+          id: ep.id,
+          number: ep.number || index + 1,
           title: ep.title,
           isFiller: ep.isFiller,
         })),
       };
     } catch (error) {
-      console.error("[Kuudere] Get anime info failed:", error);
-      throw new Error("Failed to fetch anime info from Kuudere");
+      console.error("[9Anime] Get anime info failed:", error);
+      throw new Error("Failed to fetch anime info from 9Anime");
     }
   },
 
   async getServers(episodeId: string): Promise<ProviderServer[]> {
-    // Kuudere typically has a single default server
     return [
-      { name: "Default", id: "default" },
-      { name: "Backup", id: "backup" },
+      { name: "VidStream", id: "vidstream" },
+      { name: "MyCloud", id: "mycloud" },
+      { name: "Filemoon", id: "filemoon" },
     ];
   },
 
   async getSources(
     episodeId: string,
     audioType: AudioType = "sub",
-    server: string = "default"
+    server: string = "vidstream"
   ): Promise<EpisodeSourceData> {
     try {
-      const response = await client.get(`/watch/${episodeId}`);
+      const params: Record<string, string> = { episodeId };
+      
+      if (server && server !== "vidstream") {
+        params.server = server;
+      }
+
+      let response;
+      try {
+        response = await client.get("/anime/9anime/watch", { params });
+      } catch {
+        // Fallback to gogoanime
+        response = await client.get("/anime/gogoanime/watch", { params });
+      }
+      
       const data = response.data;
 
-      if (!data?.sources && !data?.url) {
+      if (!data?.sources || data.sources.length === 0) {
         throw new Error("No sources found");
       }
 
-      // Handle both array of sources and single source formats
-      const sources = data.sources || [{ url: data.url, quality: "auto" }];
-
       return {
-        sources: sources.map((source: any) => ({
+        sources: data.sources.map((source: any) => ({
           url: source.url,
           quality: source.quality || "auto",
           isM3U8: source.url?.includes(".m3u8") || source.isM3U8 || false,
           server: server,
         })),
         subtitles: data.subtitles?.map((sub: any) => ({
-          lang: sub.lang || sub.language || "Unknown",
+          lang: sub.lang || "Unknown",
           url: sub.url,
           label: sub.lang,
         })) || [],
@@ -122,18 +150,18 @@ export const kuudereProvider: AnimeProvider = {
         server: server,
       };
     } catch (error) {
-      console.error("[Kuudere] Get sources failed:", error);
-      throw new Error("Failed to fetch sources from Kuudere");
+      console.error("[9Anime] Get sources failed:", error);
+      throw new Error("Failed to fetch sources from 9Anime");
     }
   },
 
   async checkStatus(): Promise<boolean> {
     try {
-      const response = await client.get("/search", {
-        params: { q: "naruto" },
+      const response = await client.get("/anime/gogoanime/search", {
+        params: { query: "naruto", page: 1 },
         timeout: 5000,
       });
-      return Array.isArray(response.data?.results || response.data);
+      return Array.isArray(response.data?.results);
     } catch {
       return false;
     }

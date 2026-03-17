@@ -43,7 +43,9 @@ function createConsumetProvider(providerName: ConsumetProvider): AnimeProvider {
 
     async search(query: string): Promise<SearchResult[]> {
       try {
-        const response = await client.get(`/anime/${providerName}/${encodeURIComponent(query)}`);
+        const response = await client.get(`/anime/${providerName}/search`, {
+          params: { query, page: 1 },
+        });
         const results = response.data?.results || [];
 
         return results.map((anime: any) => ({
@@ -62,7 +64,9 @@ function createConsumetProvider(providerName: ConsumetProvider): AnimeProvider {
 
     async getAnimeInfo(animeId: string): Promise<AnimeInfo> {
       try {
-        const response = await client.get(`/anime/${providerName}/info/${encodeURIComponent(animeId)}`);
+        const response = await client.get(`/anime/${providerName}/info`, {
+          params: { id: animeId },
+        });
         const data = response.data;
 
         return {
@@ -124,8 +128,8 @@ function createConsumetProvider(providerName: ConsumetProvider): AnimeProvider {
         }
 
         const response = await client.get(
-          `/anime/${providerName}/watch/${encodeURIComponent(episodeId)}`,
-          { params }
+          `/anime/${providerName}/watch`,
+          { params: { ...params, episodeId } }
         );
 
         const data = response.data;
